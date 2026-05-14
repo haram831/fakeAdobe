@@ -7,10 +7,10 @@ type StatusBarProps = {
 export function StatusBar({ status }: StatusBarProps) {
   return (
     <footer className="status-bar" aria-label="Status bar">
-      <span>Points: {status.pointCount}</span>
-      <span>Frequencies: {status.frequencyCount}</span>
-      <span>Path: {status.pathType}</span>
-      <span>Status: {status.playbackState}</span>
+      <span>Samples: {status.pointCount}</span>
+      <span>Oscillators: {status.frequencyCount}</span>
+      <span>Topology: {status.pathType}</span>
+      <span>Signal: {status.playbackState}</span>
     </footer>
   );
 }

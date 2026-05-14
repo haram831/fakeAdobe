@@ -21,8 +21,8 @@ export function FrequencySpectrum({
     <section className="frequency-spectrum" aria-label="Frequency spectrum">
       <header className="spectrum-header">
         <div>
-          <p className="panel-kicker">Spectrum</p>
-          <h2>Frequency Amplitude</h2>
+          <p className="panel-kicker">Oscilloscope</p>
+          <h2>Frequency Rupture</h2>
         </div>
         <span>
           {activeCount}/{components.length || 0} active
@@ -31,7 +31,7 @@ export function FrequencySpectrum({
 
       <div className="spectrum-plot" role="list" aria-label="Fourier component amplitudes">
         {components.length === 0 ? (
-          <p className="spectrum-empty">Draw a line to generate frequency components.</p>
+          <p className="spectrum-empty">Draw a line to agitate the frequency field.</p>
         ) : (
           components.map((component, index) => {
             const isActive = index < activeCount;

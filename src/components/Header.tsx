@@ -3,7 +3,7 @@ export function Header() {
     <header className="app-header">
       <div>
         <h1>Unanchor</h1>
-        <p>Fourier Curve Drawing Tool</p>
+        <p>Anti-anchor Fourier drawing instrument</p>
       </div>
     </header>
   );

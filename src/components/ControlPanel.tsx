@@ -1,4 +1,4 @@
-import { Download, FileUp, RotateCcw, SlidersHorizontal } from 'lucide-react';
+import { Download, FileUp, RotateCcw, SlidersHorizontal, Zap } from 'lucide-react';
 import type { ChangeEvent, Dispatch, ReactNode, SetStateAction } from 'react';
 import type { ControlledFailureSettings, DrawingState, ViewMode } from '../types';
 
@@ -17,17 +17,17 @@ function getFrequencyLimit(drawingState: DrawingState): number {
 }
 
 const viewModeLabels: Record<ViewMode, string> = {
-  finalCurve: 'Final Curve',
-  epicycle: 'Epicycle',
-  originalCompare: 'Original Compare',
-  errorView: 'Error View',
+  finalCurve: 'Trace Only',
+  epicycle: 'Oscillator Rig',
+  originalCompare: 'Source Ghost',
+  errorView: 'Error Field',
 };
 
 const controlledFailureLabels: Record<keyof ControlledFailureSettings, string> = {
-  randomPhaseDrift: 'Random Phase Drift',
+  randomPhaseDrift: 'Phase Drift',
   frequencyDropout: 'Frequency Dropout',
-  jitter: 'Jitter Amount',
-  decay: 'Decay Mode',
+  jitter: 'Trace Jitter',
+  decay: 'Signal Decay',
 };
 
 type ControlSectionProps = {
@@ -144,31 +144,54 @@ export function ControlPanel({
     event.currentTarget.value = '';
   };
 
+  const breakCurve = () => {
+    setDrawingState((current) => ({
+      ...current,
+      controlledFailure: {
+        randomPhaseDrift: {
+          enabled: true,
+          amount: Math.max(current.controlledFailure.randomPhaseDrift.amount, 36),
+        },
+        frequencyDropout: {
+          enabled: true,
+          amount: Math.max(current.controlledFailure.frequencyDropout.amount, 18),
+        },
+        jitter: {
+          enabled: true,
+          amount: Math.max(current.controlledFailure.jitter.amount, 22),
+        },
+        decay: {
+          ...current.controlledFailure.decay,
+        },
+      },
+    }));
+  };
+
   return (
     <aside className="control-panel" aria-label="Control panel">
       <header className="panel-header">
         <div>
-          <p className="panel-kicker">Controls</p>
-          <h2>Parameters</h2>
+          <p className="panel-kicker">Signal Rack</p>
+          <h2>Curve Lab</h2>
         </div>
         <SlidersHorizontal size={20} aria-hidden="true" />
       </header>
 
-      <ControlSection title="Files" label="Import and export controls">
+      <ControlSection title="I/O" label="Import and export controls">
         <label className="file-upload-button">
           <FileUp size={17} aria-hidden="true" />
-          Upload SVG
+          Unanchor
           <input type="file" accept=".svg,image/svg+xml" onChange={handleSvgFileChange} />
         </label>
         {svgError ? <p className="control-error">{svgError}</p> : null}
         <button type="button" className="panel-action-button" onClick={onPngExport}>
           <Download size={17} aria-hidden="true" />
-          Export PNG
+          Export Trace
         </button>
         {exportError ? <p className="control-error">{exportError}</p> : null}
       </ControlSection>
 
-      <ControlSection title="Fourier" label="Fourier controls">
+      <ControlSection title="Oscillators" label="Fourier controls">
         <label className="control-row">
           <span>
             Frequency Count
@@ -227,7 +250,7 @@ export function ControlPanel({
         </label>
       </ControlSection>
 
-      <ControlSection title="Display" label="Display controls">
+      <ControlSection title="Monitor" label="Display controls">
         <label className="control-row">
           <span>View Mode</span>
           <select className="view-mode-select" value={drawingState.viewMode} onChange={updateViewMode}>
@@ -240,7 +263,7 @@ export function ControlPanel({
         </label>
 
         <label className="toggle-row">
-          <span>Show Epicycles</span>
+          <span>Expose Rings</span>
           <input
             type="checkbox"
             checked={drawingState.showEpicycles}
@@ -250,7 +273,7 @@ export function ControlPanel({
         </label>
 
         <label className="toggle-row">
-          <span>Show Original</span>
+          <span>Source Ghost</span>
           <input
             type="checkbox"
             checked={drawingState.showOriginal}
@@ -261,6 +284,10 @@ export function ControlPanel({
       </ControlSection>
 
       <ControlSection title="Controlled Failure" label="Controlled failure controls">
+        <button type="button" className="panel-action-button break-button" onClick={breakCurve}>
+          <Zap size={17} aria-hidden="true" />
+          Break Curve
+        </button>
         {Object.entries(controlledFailureLabels).map(([key, label]) => {
           const failureKey = key as keyof ControlledFailureSettings;
           const failure = drawingState.controlledFailure[failureKey];
@@ -296,7 +323,7 @@ export function ControlPanel({
 
       <button type="button" className="reset-button" onClick={onReset}>
         <RotateCcw size={17} aria-hidden="true" />
-        Reset
+        Reset Path
       </button>
     </aside>
   );
