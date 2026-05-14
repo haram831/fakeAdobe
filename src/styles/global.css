@@ -87,6 +87,8 @@ select:disabled {
   display: grid;
   place-items: center;
   overflow: hidden;
+  width: 100%;
+  height: 100%;
   min-height: 420px;
   border: 1px solid rgba(243, 246, 255, 0.14);
   border-radius: 8px;
@@ -105,6 +107,8 @@ select:disabled {
   width: 100%;
   height: 100%;
   cursor: crosshair;
+  touch-action: none;
+  user-select: none;
 }
 
 .canvas-stage::before {
@@ -192,8 +196,7 @@ select:disabled {
   gap: 16px;
 }
 
-.panel-header h2,
-.control-section h3 {
+.panel-header h2 {
   margin: 0;
 }
 
@@ -203,14 +206,45 @@ select:disabled {
 
 .control-section {
   display: grid;
-  gap: 14px;
   padding: 18px 0;
   border-top: 1px solid rgba(243, 246, 255, 0.1);
 }
 
-.control-section h3 {
+.control-section-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 28px;
   color: rgba(243, 246, 255, 0.86);
   font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+}
+
+.control-section-summary::-webkit-details-marker {
+  display: none;
+}
+
+.control-section-summary::after {
+  width: 9px;
+  height: 9px;
+  margin-left: 12px;
+  border-right: 2px solid rgba(133, 255, 216, 0.72);
+  border-bottom: 2px solid rgba(133, 255, 216, 0.72);
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform 160ms ease;
+  content: "";
+}
+
+.control-section[open] .control-section-summary::after {
+  transform: rotate(225deg) translateY(-2px);
+}
+
+.control-section-content {
+  display: grid;
+  gap: 14px;
+  padding-top: 14px;
 }
 
 .failure-control {
@@ -445,6 +479,10 @@ select:disabled {
     padding: 16px;
   }
 
+  .canvas-stage {
+    min-height: clamp(320px, 72vw, 480px);
+  }
+
   .control-panel {
     max-height: none;
     border-top: 1px solid rgba(243, 246, 255, 0.12);
@@ -461,5 +499,42 @@ select:disabled {
     align-items: end;
     justify-content: space-between;
     gap: 16px;
+  }
+}
+
+@media (max-width: 560px) {
+  .app-header {
+    padding: 0 16px;
+  }
+
+  .app-header h1 {
+    font-size: 20px;
+  }
+
+  .app-shell {
+    grid-template-rows: 72px auto auto auto 42px;
+  }
+
+  .canvas-workspace {
+    padding: 12px;
+  }
+
+  .canvas-stage {
+    min-height: clamp(300px, 86vw, 400px);
+  }
+
+  .control-panel {
+    gap: 14px;
+    padding: 18px 16px;
+  }
+
+  .frequency-spectrum {
+    min-height: 118px;
+    padding: 14px 16px;
+  }
+
+  .status-bar {
+    gap: 12px;
+    padding: 0 12px;
   }
 }

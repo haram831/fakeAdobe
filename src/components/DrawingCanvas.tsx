@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import type { MouseEvent, RefObject } from 'react';
+import { useEffect, useRef } from 'react';
+import type { PointerEvent, RefObject } from 'react';
 import type { ControlledFailureSettings, FourierComponent, Point, ViewMode } from '../types';
 import { calculateEpicycles, drawEpicycles } from '../utils/epicycle';
 import { distortFourierComponents } from '../utils/distortion';
@@ -26,7 +26,7 @@ type DrawingCanvasProps = {
   onDrawingEnd: () => void;
 };
 
-function getCanvasPoint(canvas: HTMLCanvasElement, event: MouseEvent<HTMLCanvasElement>): Point {
+function getCanvasPoint(canvas: HTMLCanvasElement, event: PointerEvent<HTMLCanvasElement>): Point {
   const rect = canvas.getBoundingClientRect();
 
   return {
@@ -292,6 +292,8 @@ export function DrawingCanvas({
   onDrawingMove,
   onDrawingEnd,
 }: DrawingCanvasProps) {
+  const activePointerIdRef = useRef<number | null>(null);
+
   useEffect(() => {
     const canvas = canvasRef.current;
 
@@ -336,6 +338,12 @@ export function DrawingCanvas({
   ]);
 
   useEffect(() => {
+    const canvas = canvasRef.current;
+
+    if (!canvas) {
+      return;
+    }
+
     const handleResize = () => {
       const canvas = canvasRef.current;
 
@@ -361,9 +369,18 @@ export function DrawingCanvas({
       }
     };
 
+    const resizeObserver =
+      typeof ResizeObserver === 'undefined'
+        ? null
+        : new ResizeObserver(() => {
+            handleResize();
+          });
+
+    resizeObserver?.observe(canvas);
     window.addEventListener('resize', handleResize);
 
     return () => {
+      resizeObserver?.disconnect();
       window.removeEventListener('resize', handleResize);
     };
   }, [
@@ -384,20 +401,37 @@ export function DrawingCanvas({
     viewMode,
   ]);
 
-  const handleMouseDown = (event: MouseEvent<HTMLCanvasElement>) => {
-    event.preventDefault();
-    onDrawingStart(getCanvasPoint(event.currentTarget, event));
-  };
-
-  const handleMouseMove = (event: MouseEvent<HTMLCanvasElement>) => {
-    if (!isDrawing) {
+  const handlePointerDown = (event: PointerEvent<HTMLCanvasElement>) => {
+    if (!event.isPrimary) {
       return;
     }
 
+    event.preventDefault();
+    activePointerIdRef.current = event.pointerId;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    onDrawingStart(getCanvasPoint(event.currentTarget, event));
+  };
+
+  const handlePointerMove = (event: PointerEvent<HTMLCanvasElement>) => {
+    if (!isDrawing || activePointerIdRef.current !== event.pointerId) {
+      return;
+    }
+
+    event.preventDefault();
     onDrawingMove(getCanvasPoint(event.currentTarget, event));
   };
 
-  const handleMouseEnd = () => {
+  const handlePointerEnd = (event: PointerEvent<HTMLCanvasElement>) => {
+    if (activePointerIdRef.current !== event.pointerId) {
+      return;
+    }
+
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
+    activePointerIdRef.current = null;
+
     if (isDrawing) {
       onDrawingEnd();
     }
@@ -410,17 +444,17 @@ export function DrawingCanvas({
           ref={canvasRef}
           className="drawing-canvas"
           aria-label="Drawing canvas"
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseEnd}
-          onMouseLeave={handleMouseEnd}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerEnd}
+          onPointerCancel={handlePointerEnd}
         />
         <div className="canvas-grid" aria-hidden="true" />
         <div
           className="canvas-empty-state"
           hidden={viewMode === 'errorView' || points.length > 0 || reconstructedPath.length > 0}
         >
-          <p>Mouse drawing canvas placeholder</p>
+          <p>Draw on the canvas with a mouse, pen, or touch.</p>
         </div>
       </div>
     </section>

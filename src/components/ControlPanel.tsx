@@ -1,5 +1,5 @@
 import { Download, FileUp, RotateCcw, SlidersHorizontal } from 'lucide-react';
-import type { ChangeEvent, Dispatch, SetStateAction } from 'react';
+import type { ChangeEvent, Dispatch, ReactNode, SetStateAction } from 'react';
 import type { ControlledFailureSettings, DrawingState, ViewMode } from '../types';
 
 type ControlPanelProps = {
@@ -29,6 +29,23 @@ const controlledFailureLabels: Record<keyof ControlledFailureSettings, string> =
   jitter: 'Jitter Amount',
   decay: 'Decay Mode',
 };
+
+type ControlSectionProps = {
+  title: string;
+  label: string;
+  children: ReactNode;
+};
+
+function ControlSection({ title, label, children }: ControlSectionProps) {
+  return (
+    <details className="control-section" aria-label={label} open>
+      <summary className="control-section-summary">
+        <span>{title}</span>
+      </summary>
+      <div className="control-section-content">{children}</div>
+    </details>
+  );
+}
 
 export function ControlPanel({
   drawingState,
@@ -137,24 +154,21 @@ export function ControlPanel({
         <SlidersHorizontal size={20} aria-hidden="true" />
       </header>
 
-      <div className="control-section" aria-label="Import controls">
+      <ControlSection title="Files" label="Import and export controls">
         <label className="file-upload-button">
           <FileUp size={17} aria-hidden="true" />
           Upload SVG
           <input type="file" accept=".svg,image/svg+xml" onChange={handleSvgFileChange} />
         </label>
         {svgError ? <p className="control-error">{svgError}</p> : null}
-      </div>
-
-      <div className="control-section" aria-label="Export controls">
         <button type="button" className="panel-action-button" onClick={onPngExport}>
           <Download size={17} aria-hidden="true" />
           Export PNG
         </button>
         {exportError ? <p className="control-error">{exportError}</p> : null}
-      </div>
+      </ControlSection>
 
-      <div className="control-section" aria-label="Fourier controls">
+      <ControlSection title="Fourier" label="Fourier controls">
         <label className="control-row">
           <span>
             Frequency Count
@@ -211,9 +225,9 @@ export function ControlPanel({
             onChange={updateNumber('amplitudeDistortion')}
           />
         </label>
-      </div>
+      </ControlSection>
 
-      <div className="control-section" aria-label="Display controls">
+      <ControlSection title="Display" label="Display controls">
         <label className="control-row">
           <span>View Mode</span>
           <select className="view-mode-select" value={drawingState.viewMode} onChange={updateViewMode}>
@@ -244,11 +258,9 @@ export function ControlPanel({
             disabled={drawingState.viewMode !== 'originalCompare'}
           />
         </label>
-      </div>
+      </ControlSection>
 
-      <div className="control-section" aria-label="Controlled failure controls">
-        <h3>Controlled Failure</h3>
-
+      <ControlSection title="Controlled Failure" label="Controlled failure controls">
         {Object.entries(controlledFailureLabels).map(([key, label]) => {
           const failureKey = key as keyof ControlledFailureSettings;
           const failure = drawingState.controlledFailure[failureKey];
@@ -280,7 +292,7 @@ export function ControlPanel({
             </div>
           );
         })}
-      </div>
+      </ControlSection>
 
       <button type="button" className="reset-button" onClick={onReset}>
         <RotateCcw size={17} aria-hidden="true" />
