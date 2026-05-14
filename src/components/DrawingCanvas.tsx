@@ -26,6 +26,17 @@ type DrawingCanvasProps = {
   onDrawingEnd: () => void;
 };
 
+type CanvasMetrics = {
+  width: number;
+  height: number;
+  scale: number;
+};
+
+type SceneSnapshot = Omit<
+  DrawingCanvasProps,
+  'canvasRef' | 'onDrawingStart' | 'onDrawingMove' | 'onDrawingEnd'
+>;
+
 function getCanvasPoint(canvas: HTMLCanvasElement, event: PointerEvent<HTMLCanvasElement>): Point {
   const rect = canvas.getBoundingClientRect();
 
@@ -35,7 +46,9 @@ function getCanvasPoint(canvas: HTMLCanvasElement, event: PointerEvent<HTMLCanva
   };
 }
 
-function syncCanvasSize(canvas: HTMLCanvasElement): CanvasRenderingContext2D | null {
+function syncCanvasSize(
+  canvas: HTMLCanvasElement,
+): { context: CanvasRenderingContext2D; metrics: CanvasMetrics } | null {
   const context = canvas.getContext('2d');
 
   if (!context) {
@@ -55,25 +68,24 @@ function syncCanvasSize(canvas: HTMLCanvasElement): CanvasRenderingContext2D | n
   context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
   context.clearRect(0, 0, rect.width, rect.height);
 
-  return context;
+  return {
+    context,
+    metrics: {
+      width: rect.width,
+      height: rect.height,
+      scale: Math.max(1, Math.min(rect.width, rect.height) * 0.38),
+    },
+  };
 }
 
-function getNormalizedScale(canvas: HTMLCanvasElement): number {
-  const rect = canvas.getBoundingClientRect();
-  return Math.max(1, Math.min(rect.width, rect.height) * 0.38);
-}
-
-function toCanvasPoint(canvas: HTMLCanvasElement, point: Point, isNormalized: boolean): Point {
+function toCanvasPoint(point: Point, isNormalized: boolean, metrics: CanvasMetrics): Point {
   if (!isNormalized) {
     return point;
   }
 
-  const rect = canvas.getBoundingClientRect();
-  const scale = getNormalizedScale(canvas);
-
   return {
-    x: rect.width / 2 + point.x * scale,
-    y: rect.height / 2 + point.y * scale,
+    x: metrics.width / 2 + point.x * metrics.scale,
+    y: metrics.height / 2 + point.y * metrics.scale,
   };
 }
 
@@ -86,8 +98,8 @@ function getEpicycleTime(playbackT: number, sampleCount: number, isClosed: boole
 }
 
 function strokePath(
-  canvas: HTMLCanvasElement,
   context: CanvasRenderingContext2D,
+  metrics: CanvasMetrics,
   points: Point[],
   options: {
     isNormalized: boolean;
@@ -109,12 +121,12 @@ function strokePath(
   context.shadowColor = options.shadowColor;
   context.shadowBlur = options.shadowBlur;
 
-  const firstPoint = toCanvasPoint(canvas, points[0], options.isNormalized);
+  const firstPoint = toCanvasPoint(points[0], options.isNormalized, metrics);
   context.beginPath();
   context.moveTo(firstPoint.x, firstPoint.y);
 
-  for (const point of points.slice(1)) {
-    const canvasPoint = toCanvasPoint(canvas, point, options.isNormalized);
+  for (let index = 1; index < points.length; index += 1) {
+    const canvasPoint = toCanvasPoint(points[index], options.isNormalized, metrics);
     context.lineTo(canvasPoint.x, canvasPoint.y);
   }
 
@@ -133,8 +145,8 @@ function strokePath(
 }
 
 function drawEndpointMarkers(
-  canvas: HTMLCanvasElement,
   context: CanvasRenderingContext2D,
+  metrics: CanvasMetrics,
   points: Point[],
   isNormalized: boolean,
 ) {
@@ -142,8 +154,8 @@ function drawEndpointMarkers(
     return;
   }
 
-  const startPoint = toCanvasPoint(canvas, points[0], isNormalized);
-  const endPoint = toCanvasPoint(canvas, points[points.length - 1], isNormalized);
+  const startPoint = toCanvasPoint(points[0], isNormalized, metrics);
+  const endPoint = toCanvasPoint(points[points.length - 1], isNormalized, metrics);
 
   context.save();
 
@@ -163,15 +175,13 @@ function drawEndpointMarkers(
   context.restore();
 }
 
-function drawErrorViewPlaceholder(canvas: HTMLCanvasElement, context: CanvasRenderingContext2D) {
-  const rect = canvas.getBoundingClientRect();
-
+function drawErrorViewPlaceholder(context: CanvasRenderingContext2D, metrics: CanvasMetrics) {
   context.save();
   context.fillStyle = 'rgba(243, 246, 255, 0.58)';
   context.font = '600 14px Inter, ui-sans-serif, system-ui, sans-serif';
   context.textAlign = 'center';
   context.textBaseline = 'middle';
-  context.fillText('Error View placeholder', rect.width / 2, rect.height / 2);
+  context.fillText('Error View placeholder', metrics.width / 2, metrics.height / 2);
   context.restore();
 }
 
@@ -193,14 +203,16 @@ function drawScene(
   amplitudeDistortion: number,
   controlledFailure: ControlledFailureSettings,
 ) {
-  const context = syncCanvasSize(canvas);
+  const canvasState = syncCanvasSize(canvas);
 
-  if (!context) {
+  if (!canvasState) {
     return;
   }
 
+  const { context, metrics } = canvasState;
+
   if (isDrawing) {
-    strokePath(canvas, context, points, {
+    strokePath(context, metrics, points, {
       isNormalized: false,
       strokeStyle: '#85ffd8',
       lineWidth: 2.4,
@@ -208,17 +220,17 @@ function drawScene(
       shadowBlur: 12,
       closePath: false,
     });
-    drawEndpointMarkers(canvas, context, points, false);
+    drawEndpointMarkers(context, metrics, points, false);
     return;
   }
 
   if (viewMode === 'errorView') {
-    drawErrorViewPlaceholder(canvas, context);
+    drawErrorViewPlaceholder(context, metrics);
     return;
   }
 
   if (showOriginal) {
-    strokePath(canvas, context, originalPoints, {
+    strokePath(context, metrics, originalPoints, {
       isNormalized: true,
       strokeStyle: 'rgba(243, 246, 255, 0.24)',
       lineWidth: 1.6,
@@ -245,10 +257,10 @@ function drawScene(
       },
     );
 
-    drawEpicycles(context, epicycles, (point) => toCanvasPoint(canvas, point, true));
+    drawEpicycles(context, epicycles, (point) => toCanvasPoint(point, true, metrics));
   }
 
-  strokePath(canvas, context, reconstructedPath, {
+  strokePath(context, metrics, reconstructedPath, {
     isNormalized: true,
     strokeStyle: '#85ffd8',
     lineWidth: showOriginal ? 3.6 : 3.2,
@@ -257,10 +269,10 @@ function drawScene(
     closePath: isClosed,
   });
 
-  drawEndpointMarkers(canvas, context, showOriginal ? originalPoints : reconstructedPath, true);
+  drawEndpointMarkers(context, metrics, showOriginal ? originalPoints : reconstructedPath, true);
 
   if (errorPath.length > 0) {
-    strokePath(canvas, context, errorPath, {
+    strokePath(context, metrics, errorPath, {
       isNormalized: true,
       strokeStyle: 'rgba(255, 119, 119, 0.8)',
       lineWidth: 1.4,
@@ -293,32 +305,73 @@ export function DrawingCanvas({
   onDrawingEnd,
 }: DrawingCanvasProps) {
   const activePointerIdRef = useRef<number | null>(null);
+  const sceneSnapshotRef = useRef<SceneSnapshot>({
+    points,
+    originalPoints,
+    reconstructedPath,
+    errorPath,
+    isClosed,
+    fourierComponents,
+    playbackT,
+    isDrawing,
+    viewMode,
+    showEpicycles,
+    showOriginal,
+    frequencyCount,
+    phaseDistortion,
+    amplitudeDistortion,
+    controlledFailure,
+  });
 
-  useEffect(() => {
+  sceneSnapshotRef.current = {
+    points,
+    originalPoints,
+    reconstructedPath,
+    errorPath,
+    isClosed,
+    fourierComponents,
+    playbackT,
+    isDrawing,
+    viewMode,
+    showEpicycles,
+    showOriginal,
+    frequencyCount,
+    phaseDistortion,
+    amplitudeDistortion,
+    controlledFailure,
+  };
+
+  const drawLatestScene = () => {
     const canvas = canvasRef.current;
 
     if (!canvas) {
       return;
     }
 
+    const scene = sceneSnapshotRef.current;
+
     drawScene(
       canvas,
-      points,
-      originalPoints,
-      reconstructedPath,
-      errorPath,
-      isClosed,
-      fourierComponents,
-      playbackT,
-      isDrawing,
-      viewMode,
-      showEpicycles,
-      showOriginal,
-      frequencyCount,
-      phaseDistortion,
-      amplitudeDistortion,
-      controlledFailure,
+      scene.points,
+      scene.originalPoints,
+      scene.reconstructedPath,
+      scene.errorPath,
+      scene.isClosed,
+      scene.fourierComponents,
+      scene.playbackT,
+      scene.isDrawing,
+      scene.viewMode,
+      scene.showEpicycles,
+      scene.showOriginal,
+      scene.frequencyCount,
+      scene.phaseDistortion,
+      scene.amplitudeDistortion,
+      scene.controlledFailure,
     );
+  };
+
+  useEffect(() => {
+    drawLatestScene();
   }, [
     amplitudeDistortion,
     controlledFailure,
@@ -345,28 +398,7 @@ export function DrawingCanvas({
     }
 
     const handleResize = () => {
-      const canvas = canvasRef.current;
-
-      if (canvas) {
-        drawScene(
-          canvas,
-          points,
-          originalPoints,
-          reconstructedPath,
-          errorPath,
-          isClosed,
-          fourierComponents,
-          playbackT,
-          isDrawing,
-          viewMode,
-          showEpicycles,
-          showOriginal,
-          frequencyCount,
-          phaseDistortion,
-          amplitudeDistortion,
-          controlledFailure,
-        );
-      }
+      drawLatestScene();
     };
 
     const resizeObserver =
@@ -383,23 +415,7 @@ export function DrawingCanvas({
       resizeObserver?.disconnect();
       window.removeEventListener('resize', handleResize);
     };
-  }, [
-    amplitudeDistortion,
-    controlledFailure,
-    errorPath,
-    fourierComponents,
-    frequencyCount,
-    isClosed,
-    isDrawing,
-    originalPoints,
-    phaseDistortion,
-    playbackT,
-    points,
-    reconstructedPath,
-    showEpicycles,
-    showOriginal,
-    viewMode,
-  ]);
+  }, []);
 
   const handlePointerDown = (event: PointerEvent<HTMLCanvasElement>) => {
     if (!event.isPrimary) {

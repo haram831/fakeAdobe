@@ -12,8 +12,19 @@ import { isClosedPath, preparePointsForFourier } from './utils/points';
 import { sampleFirstSvgPath } from './utils/svg';
 import type { DrawingState, Point } from './types';
 
-const FOURIER_SAMPLE_COUNT = 256;
+const FOURIER_TARGET_SAMPLE_COUNT = 256;
 const PLAYBACK_DURATION_MS = 6000;
+
+type ReconstructionCacheEntry = {
+  fourierComponents: DrawingState['fourierComponents'];
+  controlledFailure: DrawingState['controlledFailure'];
+  frequencyCount: number;
+  phaseDistortion: number;
+  amplitudeDistortion: number;
+  isClosed: boolean;
+  sampleCount: number;
+  path: Point[];
+};
 
 function getComponentCountLimit(drawingState: DrawingState): number {
   return Math.max(1, drawingState.fourierComponents.length || drawingState.frequencyCount);
@@ -23,26 +34,44 @@ function getClampedFrequencyCount(drawingState: DrawingState): number {
   return Math.min(drawingState.frequencyCount, getComponentCountLimit(drawingState));
 }
 
-function getReconstructionTime(index: number, isClosed: boolean): number {
-  return isClosed ? index / (FOURIER_SAMPLE_COUNT - 1) : index / FOURIER_SAMPLE_COUNT;
+function getReconstructionTime(index: number, sampleCount: number, isClosed: boolean): number {
+  if (sampleCount <= 1) {
+    return 0;
+  }
+
+  return isClosed ? index / (sampleCount - 1) : index / sampleCount;
 }
 
-function getReconstructedPath(drawingState: DrawingState, playbackT: number): Point[] {
+function getVisibleReconstructedPath(path: Point[], playbackT: number): Point[] {
+  if (path.length === 0) {
+    return [];
+  }
+
+  const lastSampleIndex = Math.floor(playbackT * (path.length - 1));
+  return path.slice(0, lastSampleIndex + 1);
+}
+
+function getTargetSampleCount(): number {
+  return FOURIER_TARGET_SAMPLE_COUNT;
+}
+
+function buildFullReconstructedPath(drawingState: DrawingState): Point[] {
   if (drawingState.fourierComponents.length === 0) {
     return [];
   }
 
-  const lastSampleIndex = Math.floor(playbackT * (FOURIER_SAMPLE_COUNT - 1));
+  const sampleCount = Math.max(1, drawingState.points.length || FOURIER_TARGET_SAMPLE_COUNT);
+  const frequencyCount = getClampedFrequencyCount(drawingState);
+  const activeComponents = drawingState.fourierComponents.slice(0, frequencyCount);
 
-  return Array.from({ length: lastSampleIndex + 1 }, (_, index) => {
-    const time = getReconstructionTime(index, drawingState.isClosed);
+  return Array.from({ length: sampleCount }, (_, index) => {
+    const time = getReconstructionTime(index, sampleCount, drawingState.isClosed);
     const distortedComponents = distortFourierComponents(
-      drawingState.fourierComponents,
+      activeComponents,
       drawingState.controlledFailure,
       time,
     );
     const reconstructedPoint = reconstructPoint(distortedComponents, time, {
-      componentCount: getClampedFrequencyCount(drawingState),
       phaseDistortion: drawingState.phaseDistortion,
       amplitudeDistortion: drawingState.amplitudeDistortion,
     });
@@ -95,11 +124,50 @@ export function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const animationStartTimeRef = useRef<number | null>(null);
+  const latestDrawingStateRef = useRef<DrawingState>(drawingState);
+  const reconstructionCacheRef = useRef<ReconstructionCacheEntry | null>(null);
   const status = useToolStatus(drawingState);
+
+  const getCachedFullReconstructedPath = (state: DrawingState): Point[] => {
+    const frequencyCount = getClampedFrequencyCount(state);
+    const sampleCount = Math.max(1, state.points.length || FOURIER_TARGET_SAMPLE_COUNT);
+    const cached = reconstructionCacheRef.current;
+
+    if (
+      cached &&
+      cached.fourierComponents === state.fourierComponents &&
+      cached.controlledFailure === state.controlledFailure &&
+      cached.frequencyCount === frequencyCount &&
+      cached.phaseDistortion === state.phaseDistortion &&
+      cached.amplitudeDistortion === state.amplitudeDistortion &&
+      cached.isClosed === state.isClosed &&
+      cached.sampleCount === sampleCount
+    ) {
+      return cached.path;
+    }
+
+    const path = buildFullReconstructedPath({
+      ...state,
+      frequencyCount,
+    });
+
+    reconstructionCacheRef.current = {
+      fourierComponents: state.fourierComponents,
+      controlledFailure: state.controlledFailure,
+      frequencyCount,
+      phaseDistortion: state.phaseDistortion,
+      amplitudeDistortion: state.amplitudeDistortion,
+      isClosed: state.isClosed,
+      sampleCount,
+      path,
+    };
+
+    return path;
+  };
 
   const buildFourierStateFromPoints = (current: DrawingState, sourcePoints: Point[]): DrawingState => {
     const isClosed = isClosedPath(sourcePoints);
-    const preparedPoints = preparePointsForFourier(sourcePoints, FOURIER_SAMPLE_COUNT);
+    const preparedPoints = preparePointsForFourier(sourcePoints, getTargetSampleCount());
     const fourierComponents = sortFourierComponents(dft(preparedPoints));
     const nextState = {
       ...current,
@@ -117,9 +185,13 @@ export function App() {
     return {
       ...nextState,
       frequencyCount: getClampedFrequencyCount(nextState),
-      reconstructedPath: getReconstructedPath(nextState, 0),
+      reconstructedPath: getVisibleReconstructedPath(buildFullReconstructedPath(nextState), 0),
     };
   };
+
+  useEffect(() => {
+    latestDrawingStateRef.current = drawingState;
+  }, [drawingState]);
 
   useEffect(() => {
     if (!drawingState.isPlaying || drawingState.fourierComponents.length === 0) {
@@ -143,19 +215,22 @@ export function App() {
         animationStartTimeRef.current = timestamp;
       }
 
+      const currentState = latestDrawingStateRef.current;
       const elapsed = timestamp - animationStartTimeRef.current;
-      const playbackSpeed = Math.max(0, drawingState.speed);
+      const playbackSpeed = Math.max(0, currentState.speed);
       const progress =
         playbackSpeed === 0 ? 0 : Math.min(1, (elapsed * playbackSpeed) / PLAYBACK_DURATION_MS);
+      const fullPath = getCachedFullReconstructedPath(currentState);
+      const visiblePath = getVisibleReconstructedPath(fullPath, progress);
 
       setDrawingState((current) => {
-        if (!current.isPlaying || current.fourierComponents !== drawingState.fourierComponents) {
+        if (!current.isPlaying || current.fourierComponents !== currentState.fourierComponents) {
           return current;
         }
 
         return {
           ...current,
-          reconstructedPath: getReconstructedPath(current, progress),
+          reconstructedPath: visiblePath,
           playbackT: progress,
           isPlaying: progress < 1,
         };
@@ -166,7 +241,9 @@ export function App() {
       }
     };
 
-    animationFrameRef.current = window.requestAnimationFrame(step);
+    if (animationFrameRef.current === null) {
+      animationFrameRef.current = window.requestAnimationFrame(step);
+    }
 
     return () => {
       isCancelled = true;
@@ -177,14 +254,8 @@ export function App() {
       }
     };
   }, [
-    drawingState.amplitudeDistortion,
-    drawingState.controlledFailure,
     drawingState.fourierComponents,
-    drawingState.frequencyCount,
-    drawingState.isClosed,
     drawingState.isPlaying,
-    drawingState.phaseDistortion,
-    drawingState.speed,
   ]);
 
   useEffect(() => {
@@ -215,7 +286,10 @@ export function App() {
 
       return {
         ...nextState,
-        reconstructedPath: getReconstructedPath(nextState, nextState.playbackT),
+        reconstructedPath: getVisibleReconstructedPath(
+          getCachedFullReconstructedPath(nextState),
+          nextState.playbackT,
+        ),
       };
     });
   }, [
@@ -280,7 +354,7 @@ export function App() {
   const importSvgFile = async (file: File) => {
     try {
       const svgText = await file.text();
-      const sampledPoints = sampleFirstSvgPath(svgText, FOURIER_SAMPLE_COUNT);
+      const sampledPoints = sampleFirstSvgPath(svgText, FOURIER_TARGET_SAMPLE_COUNT);
 
       if (sampledPoints.length < 2) {
         throw new Error('SVG path did not produce enough points.');
