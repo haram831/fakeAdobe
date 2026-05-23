@@ -8,7 +8,7 @@ type ControlPanelProps = {
   svgError: string | null;
   exportError: string | null;
   onSvgImport: (file: File) => void;
-  onPngExport: () => void;
+  onExport: () => void;
   onReset: () => void;
 };
 
@@ -71,7 +71,7 @@ export function ControlPanel({
   svgError,
   exportError,
   onSvgImport,
-  onPngExport,
+  onExport,
   onReset,
 }: ControlPanelProps) {
   const frequencyLimit = getFrequencyLimit(drawingState);
@@ -264,7 +264,7 @@ export function ControlPanel({
         <button
           type="button"
           className="panel-action-button"
-          onClick={onPngExport}
+          onClick={onExport}
         >
           <Download size={17} aria-hidden="true" />
           {hasMultiplePaths && drawingState.selectedPathId !== null

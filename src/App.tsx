@@ -6,7 +6,6 @@ import { Header } from './components/Header';
 import { StatusBar } from './components/StatusBar';
 import { useToolStatus } from './hooks/useToolStatus';
 import { applyJitterToPoint, distortFourierComponents } from './utils/distortion';
-import { exportCanvasAsPng } from './utils/export';
 import { dft, reconstructPoint, sortFourierComponents } from './utils/fourier';
 import { getPathLength, isClosedPath, preparePointGroupsForFourier } from './utils/points';
 import { sampleSvgPaths } from './utils/svg';
@@ -496,34 +495,23 @@ export function App() {
     }
   };
 
-  const exportPng = async () => {
-    const canvas = canvasRef.current;
-
-    if (!canvas) {
-      setExportError('Canvas is not ready to export.');
-      return;
-    }
-
+  const exportSvg = () => {
     try {
-      if (drawingState.paths.length > 1) {
-        const pathToExport = getSelectedPath(drawingState);
+      const pathToExport = drawingState.paths.length > 1
+        ? getSelectedPath(drawingState)
+        : drawingState.paths[0] ?? null;
 
-        if (pathToExport) {
-          const fullPath = getCachedFullReconstructedPath(drawingState, pathToExport);
-          downloadSelectedPathAsSvg(pathToExport, fullPath, drawingState.curveColor);
-        } else {
-          downloadPathsAsSvg(
-            drawingState.paths.map((path) => ({
-              label: path.label,
-              points: getCachedFullReconstructedPath(drawingState, path),
-            })),
-            drawingState.curveColor,
-          );
-        }
+      if (pathToExport) {
+        const fullPath = getCachedFullReconstructedPath(drawingState, pathToExport);
+        downloadSelectedPathAsSvg(pathToExport, fullPath, drawingState.curveColor);
       } else {
-        await exportCanvasAsPng(canvas, {
-          includeBackground: false,
-        });
+        downloadPathsAsSvg(
+          drawingState.paths.map((path) => ({
+            label: path.label,
+            points: getCachedFullReconstructedPath(drawingState, path),
+          })),
+          drawingState.curveColor,
+        );
       }
 
       setExportError(null);
@@ -566,7 +554,7 @@ export function App() {
         svgError={svgError}
         exportError={exportError}
         onSvgImport={importSvgFile}
-        onPngExport={exportPng}
+        onExport={exportSvg}
         onReset={resetDrawing}
       />
       <FrequencySpectrum
