@@ -54,6 +54,7 @@ export type DrawingState = {
   speed: number;
   phaseDistortion: number;
   amplitudeDistortion: number;
+  curveColor: string;
   controlledFailure: ControlledFailureSettings;
 };
 

@@ -365,6 +365,58 @@ select:disabled {
   font-size: 12px;
 }
 
+.color-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 54px;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 8px;
+  border: 1px solid rgba(237, 244, 238, 0.13);
+  background:
+    repeating-linear-gradient(90deg, rgba(237, 244, 238, 0.035) 0 1px, transparent 1px 10px),
+    rgba(5, 5, 7, 0.64);
+  color: rgba(237, 244, 238, 0.74);
+  font-size: 12px;
+}
+
+.color-control span {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.color-control strong {
+  color: #d6ff50;
+  font-size: 11px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.color-control input[type="color"] {
+  width: 54px;
+  height: 32px;
+  padding: 2px;
+  border: 1px solid rgba(237, 244, 238, 0.24);
+  border-radius: 2px;
+  background: #050507;
+  cursor: pointer;
+}
+
+.color-control input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.color-control input[type="color"]::-webkit-color-swatch {
+  border: 0;
+  border-radius: 1px;
+}
+
+.color-control input[type="color"]::-moz-color-swatch {
+  border: 0;
+  border-radius: 1px;
+}
+
 .control-row span,
 .toggle-row {
   display: flex;
@@ -408,6 +460,7 @@ select:disabled {
 .panel-action-button:focus-visible,
 .reset-button:focus-visible,
 .toggle-row input:focus-visible,
+.color-control input:focus-visible,
 .control-row input:focus-visible {
   outline: 1px solid rgba(141, 255, 225, 0.9);
   outline-offset: 2px;

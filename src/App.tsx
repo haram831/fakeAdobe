@@ -97,6 +97,7 @@ const initialDrawingState: DrawingState = {
   speed: 1,
   phaseDistortion: 0,
   amplitudeDistortion: 0,
+  curveColor: '#85ffd8',
   controlledFailure: {
     randomPhaseDrift: {
       enabled: false,
@@ -409,6 +410,7 @@ export function App() {
         frequencyCount={drawingState.frequencyCount}
         phaseDistortion={drawingState.phaseDistortion}
         amplitudeDistortion={drawingState.amplitudeDistortion}
+        curveColor={drawingState.curveColor}
         controlledFailure={drawingState.controlledFailure}
         canvasRef={canvasRef}
         onDrawingStart={startDrawing}

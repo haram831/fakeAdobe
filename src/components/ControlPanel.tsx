@@ -134,6 +134,15 @@ export function ControlPanel({
     };
   };
 
+  const updateCurveColor = (event: ChangeEvent<HTMLInputElement>) => {
+    const { value } = event.currentTarget;
+
+    setDrawingState((current) => ({
+      ...current,
+      curveColor: value,
+    }));
+  };
+
   const handleSvgFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
 
@@ -251,6 +260,19 @@ export function ControlPanel({
       </ControlSection>
 
       <ControlSection title="Monitor" label="Display controls">
+        <label className="color-control">
+          <span>
+            Trace Color
+            <strong>{drawingState.curveColor.toUpperCase()}</strong>
+          </span>
+          <input
+            type="color"
+            value={drawingState.curveColor}
+            onChange={updateCurveColor}
+            aria-label="Trace color"
+          />
+        </label>
+
         <label className="control-row">
           <span>View Mode</span>
           <select className="view-mode-select" value={drawingState.viewMode} onChange={updateViewMode}>

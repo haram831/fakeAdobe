@@ -19,6 +19,7 @@ type DrawingCanvasProps = {
   frequencyCount: number;
   phaseDistortion: number;
   amplitudeDistortion: number;
+  curveColor: string;
   controlledFailure: ControlledFailureSettings;
   canvasRef: RefObject<HTMLCanvasElement>;
   onDrawingStart: (point: Point) => void;
@@ -89,6 +90,20 @@ function toCanvasPoint(point: Point, isNormalized: boolean, metrics: CanvasMetri
   };
 }
 
+function hexToRgba(hexColor: string, alpha: number): string {
+  const normalizedHex = hexColor.replace('#', '');
+
+  if (!/^[\da-f]{6}$/i.test(normalizedHex)) {
+    return `rgba(133, 255, 216, ${alpha})`;
+  }
+
+  const red = Number.parseInt(normalizedHex.slice(0, 2), 16);
+  const green = Number.parseInt(normalizedHex.slice(2, 4), 16);
+  const blue = Number.parseInt(normalizedHex.slice(4, 6), 16);
+
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+}
+
 function getEpicycleTime(playbackT: number, sampleCount: number, isClosed: boolean): number {
   if (isClosed || sampleCount <= 1) {
     return playbackT;
@@ -149,6 +164,7 @@ function drawEndpointMarkers(
   metrics: CanvasMetrics,
   points: Point[],
   isNormalized: boolean,
+  curveColor: string,
 ) {
   if (points.length < 2) {
     return;
@@ -160,8 +176,8 @@ function drawEndpointMarkers(
   context.save();
 
   context.shadowBlur = 8;
-  context.shadowColor = 'rgba(133, 255, 216, 0.45)';
-  context.fillStyle = '#85ffd8';
+  context.shadowColor = hexToRgba(curveColor, 0.45);
+  context.fillStyle = curveColor;
   context.beginPath();
   context.arc(startPoint.x, startPoint.y, 3.8, 0, Math.PI * 2);
   context.fill();
@@ -201,6 +217,7 @@ function drawScene(
   frequencyCount: number,
   phaseDistortion: number,
   amplitudeDistortion: number,
+  curveColor: string,
   controlledFailure: ControlledFailureSettings,
 ) {
   const canvasState = syncCanvasSize(canvas);
@@ -214,13 +231,13 @@ function drawScene(
   if (isDrawing) {
     strokePath(context, metrics, points, {
       isNormalized: false,
-      strokeStyle: '#85ffd8',
+      strokeStyle: curveColor,
       lineWidth: 2.4,
-      shadowColor: 'rgba(133, 255, 216, 0.52)',
+      shadowColor: hexToRgba(curveColor, 0.52),
       shadowBlur: 12,
       closePath: false,
     });
-    drawEndpointMarkers(context, metrics, points, false);
+    drawEndpointMarkers(context, metrics, points, false, curveColor);
     return;
   }
 
@@ -262,14 +279,20 @@ function drawScene(
 
   strokePath(context, metrics, reconstructedPath, {
     isNormalized: true,
-    strokeStyle: '#85ffd8',
+    strokeStyle: curveColor,
     lineWidth: showOriginal ? 3.6 : 3.2,
-    shadowColor: showOriginal ? 'rgba(133, 255, 216, 0.68)' : 'rgba(133, 255, 216, 0.58)',
+    shadowColor: showOriginal ? hexToRgba(curveColor, 0.68) : hexToRgba(curveColor, 0.58),
     shadowBlur: showOriginal ? 18 : 14,
     closePath: isClosed,
   });
 
-  drawEndpointMarkers(context, metrics, showOriginal ? originalPoints : reconstructedPath, true);
+  drawEndpointMarkers(
+    context,
+    metrics,
+    showOriginal ? originalPoints : reconstructedPath,
+    true,
+    curveColor,
+  );
 
   if (errorPath.length > 0) {
     strokePath(context, metrics, errorPath, {
@@ -298,6 +321,7 @@ export function DrawingCanvas({
   frequencyCount,
   phaseDistortion,
   amplitudeDistortion,
+  curveColor,
   controlledFailure,
   canvasRef,
   onDrawingStart,
@@ -320,6 +344,7 @@ export function DrawingCanvas({
     frequencyCount,
     phaseDistortion,
     amplitudeDistortion,
+    curveColor,
     controlledFailure,
   });
 
@@ -338,6 +363,7 @@ export function DrawingCanvas({
     frequencyCount,
     phaseDistortion,
     amplitudeDistortion,
+    curveColor,
     controlledFailure,
   };
 
@@ -366,6 +392,7 @@ export function DrawingCanvas({
       scene.frequencyCount,
       scene.phaseDistortion,
       scene.amplitudeDistortion,
+      scene.curveColor,
       scene.controlledFailure,
     );
   };
@@ -374,6 +401,7 @@ export function DrawingCanvas({
     drawLatestScene();
   }, [
     amplitudeDistortion,
+    curveColor,
     controlledFailure,
     errorPath,
     fourierComponents,
