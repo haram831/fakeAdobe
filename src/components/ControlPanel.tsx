@@ -1,4 +1,4 @@
-import { Download, FileUp, RotateCcw, SlidersHorizontal, Zap } from 'lucide-react';
+import { Download, FileUp, Link, RotateCcw, SlidersHorizontal, Zap } from 'lucide-react';
 import type { ChangeEvent, Dispatch, ReactNode, SetStateAction } from 'react';
 import type { ControlledFailureSettings, DrawingState, ViewMode } from '../types';
 
@@ -13,7 +13,25 @@ type ControlPanelProps = {
 };
 
 function getFrequencyLimit(drawingState: DrawingState): number {
-  return Math.max(1, drawingState.fourierComponents.length || drawingState.frequencyCount);
+  if (drawingState.paths.length === 0) {
+    return Math.max(1, drawingState.frequencyCount);
+  }
+
+  return Math.max(
+    1,
+    drawingState.paths.reduce(
+      (maxValue, path) => Math.max(maxValue, path.fourierComponents.length),
+      1,
+    ),
+  );
+}
+
+function getPathFrequencyLimit(path: DrawingState['paths'][number]): number {
+  return Math.max(1, path.fourierComponents.length);
+}
+
+function getPathFrequencyCount(path: DrawingState['paths'][number], globalFrequencyCount: number): number {
+  return Math.min(path.frequencyCountOverride ?? globalFrequencyCount, getPathFrequencyLimit(path));
 }
 
 const viewModeLabels: Record<ViewMode, string> = {
@@ -58,6 +76,7 @@ export function ControlPanel({
 }: ControlPanelProps) {
   const frequencyLimit = getFrequencyLimit(drawingState);
   const frequencyCount = Math.min(drawingState.frequencyCount, frequencyLimit);
+  const hasMultiplePaths = drawingState.paths.length > 1;
 
   const updateNumber = (key: 'frequencyCount' | 'speed' | 'phaseDistortion' | 'amplitudeDistortion') => {
     return (event: ChangeEvent<HTMLInputElement>) => {
@@ -67,11 +86,60 @@ export function ControlPanel({
         return;
       }
 
+      setDrawingState((current) => {
+        if (key !== 'frequencyCount') {
+          return {
+            ...current,
+            [key]: value,
+          };
+        }
+
+        return {
+          ...current,
+          frequencyCount: Math.min(value, getFrequencyLimit(current)),
+          paths: current.paths.map((path) => ({
+            ...path,
+            frequencyCountOverride: null,
+          })),
+        };
+      });
+    };
+  };
+
+  const updatePathFrequencyCount = (pathId: string) => {
+    return (event: ChangeEvent<HTMLInputElement>) => {
+      const value = Number(event.currentTarget.value);
+
+      if (!Number.isFinite(value)) {
+        return;
+      }
+
       setDrawingState((current) => ({
         ...current,
-        [key]: key === 'frequencyCount' ? Math.min(value, getFrequencyLimit(current)) : value,
+        paths: current.paths.map((path) =>
+          path.id === pathId
+            ? {
+                ...path,
+                frequencyCountOverride: Math.min(value, getPathFrequencyLimit(path)),
+              }
+            : path,
+        ),
       }));
     };
+  };
+
+  const resetPathFrequencyCount = (pathId: string) => {
+    setDrawingState((current) => ({
+      ...current,
+      paths: current.paths.map((path) =>
+        path.id === pathId
+          ? {
+              ...path,
+              frequencyCountOverride: null,
+            }
+          : path,
+      ),
+    }));
   };
 
   const updateBoolean = (key: 'showEpicycles' | 'showOriginal') => {
@@ -193,9 +261,17 @@ export function ControlPanel({
           <input type="file" accept=".svg,image/svg+xml" onChange={handleSvgFileChange} />
         </label>
         {svgError ? <p className="control-error">{svgError}</p> : null}
-        <button type="button" className="panel-action-button" onClick={onPngExport}>
+        <button
+          type="button"
+          className="panel-action-button"
+          onClick={onPngExport}
+        >
           <Download size={17} aria-hidden="true" />
-          Export Trace
+          {hasMultiplePaths && drawingState.selectedPathId !== null
+            ? 'Export Selected Path'
+            : hasMultiplePaths
+              ? 'Export All Paths'
+              : 'Export Trace'}
         </button>
         {exportError ? <p className="control-error">{exportError}</p> : null}
       </ControlSection>
@@ -214,6 +290,45 @@ export function ControlPanel({
             onChange={updateNumber('frequencyCount')}
           />
         </label>
+
+        {hasMultiplePaths
+          ? drawingState.paths.map((path) => {
+              const pathFrequencyLimit = getPathFrequencyLimit(path);
+              const pathFrequencyCount = getPathFrequencyCount(path, drawingState.frequencyCount);
+              const isLinked = path.frequencyCountOverride === null;
+
+              return (
+                <div className="path-frequency-control" key={path.id}>
+                  <label className="control-row">
+                    <span>
+                      {path.label}
+                      <strong>
+                        {pathFrequencyCount}/{pathFrequencyLimit}
+                      </strong>
+                    </span>
+                    <input
+                      type="range"
+                      min="1"
+                      max={pathFrequencyLimit}
+                      value={pathFrequencyCount}
+                      onChange={updatePathFrequencyCount(path.id)}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="path-link-button"
+                    onClick={() => resetPathFrequencyCount(path.id)}
+                    disabled={isLinked}
+                    aria-label={`Link path ${path.label} frequency count to global control`}
+                    title="Link to global frequency count"
+                  >
+                    <Link size={14} aria-hidden="true" />
+                    {isLinked ? 'Linked' : 'Link'}
+                  </button>
+                </div>
+              );
+            })
+          : null}
 
         <label className="control-row">
           <span>

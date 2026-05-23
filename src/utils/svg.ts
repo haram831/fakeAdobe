@@ -96,6 +96,28 @@ function samplePolyline(points: Point[], sampleCount: number): Point[] {
   }
 }
 
+function getSampledPathGroups(svgDocument: Document, sampleCount: number): Point[][] {
+  const sampledGroups: Point[][] = [];
+
+  svgDocument.querySelectorAll('path').forEach((path) => {
+    const pathData = path.getAttribute('d');
+
+    if (pathData) {
+      sampledGroups.push(samplePathData(pathData, sampleCount));
+    }
+  });
+
+  svgDocument.querySelectorAll('polyline, polygon').forEach((polyline) => {
+    const pointsValue = polyline.getAttribute('points');
+
+    if (pointsValue) {
+      sampledGroups.push(samplePolyline(parsePolylinePoints(pointsValue), sampleCount));
+    }
+  });
+
+  return sampledGroups;
+}
+
 export function sampleFirstSvgPath(svgText: string, sampleCount: number): Point[] {
   if (!Number.isInteger(sampleCount) || sampleCount < 2) {
     throw new Error('SVG sample count must be at least 2.');
@@ -127,4 +149,21 @@ export function sampleFirstSvgPath(svgText: string, sampleCount: number): Point[
   }
 
   throw new Error('No path or polyline found in SVG.');
+}
+
+export function sampleSvgPaths(svgText: string, sampleCount: number): Point[][] {
+  if (!Number.isInteger(sampleCount) || sampleCount < 2) {
+    throw new Error('SVG sample count must be at least 2.');
+  }
+
+  const svgDocument = parseSvg(svgText);
+  const sampledGroups = getSampledPathGroups(svgDocument, sampleCount).filter(
+    (points) => points.length >= 2,
+  );
+
+  if (sampledGroups.length === 0) {
+    throw new Error('No path or polyline found in SVG.');
+  }
+
+  return sampledGroups;
 }

@@ -37,13 +37,23 @@ export type ControlledFailureSettings = {
   };
 };
 
-export type DrawingState = {
+export type FourierPath = {
+  id: string;
+  label: string;
   points: Point[];
   originalPoints: Point[];
   fourierComponents: FourierComponent[];
   reconstructedPath: Point[];
   errorPath: Point[];
   isClosed: boolean;
+  length: number;
+  frequencyCountOverride: number | null;
+};
+
+export type DrawingState = {
+  paths: FourierPath[];
+  selectedPathId: string | null;
+  draftPoints: Point[];
   playbackT: number;
   isDrawing: boolean;
   isPlaying: boolean;
@@ -60,6 +70,7 @@ export type DrawingState = {
 
 export type ToolStatus = {
   pointCount: number;
+  pathCount: number;
   frequencyCount: number;
   pathType: 'Open' | 'Closed';
   playbackState: 'Drawing' | 'Playing';

@@ -1,12 +1,14 @@
 import type { FourierComponent } from '../types';
 
 type FrequencySpectrumProps = {
+  pathLabel?: string | null;
   components: FourierComponent[];
   frequencyCount: number;
   onComponentToggle?: (componentIndex: number) => void;
 };
 
 export function FrequencySpectrum({
+  pathLabel,
   components,
   frequencyCount,
   onComponentToggle,
@@ -22,7 +24,7 @@ export function FrequencySpectrum({
       <header className="spectrum-header">
         <div>
           <p className="panel-kicker">Oscilloscope</p>
-          <h2>Frequency Rupture</h2>
+          <h2>{pathLabel ? `Path ${pathLabel}` : 'Frequency Rupture'}</h2>
         </div>
         <span>
           {activeCount}/{components.length || 0} active

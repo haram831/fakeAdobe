@@ -186,3 +186,50 @@ export function normalizePoints(points: Point[], scale: number): Point[] {
 export function preparePointsForFourier(points: Point[], targetCount: number): Point[] {
   return normalizePoints(centerPoints(resamplePoints(points, targetCount)), 1);
 }
+
+export function preparePointGroupsForFourier(pointGroups: Point[][], targetCount: number): Point[][] {
+  const resampledGroups = pointGroups.map((points) => resamplePoints(points, targetCount));
+  const allPoints = resampledGroups.flat();
+
+  assertPointArray(allPoints);
+
+  if (allPoints.length === 0) {
+    return resampledGroups;
+  }
+
+  const bounds = allPoints.reduce(
+    (currentBounds, point) => ({
+      minX: Math.min(currentBounds.minX, point.x),
+      minY: Math.min(currentBounds.minY, point.y),
+      maxX: Math.max(currentBounds.maxX, point.x),
+      maxY: Math.max(currentBounds.maxY, point.y),
+    }),
+    {
+      minX: Number.POSITIVE_INFINITY,
+      minY: Number.POSITIVE_INFINITY,
+      maxX: Number.NEGATIVE_INFINITY,
+      maxY: Number.NEGATIVE_INFINITY,
+    },
+  );
+  const center = {
+    x: (bounds.minX + bounds.maxX) / 2,
+    y: (bounds.minY + bounds.maxY) / 2,
+  };
+  const maxDistanceFromOrigin = allPoints.reduce(
+    (maxDistance, point) => Math.max(maxDistance, Math.hypot(point.x - center.x, point.y - center.y)),
+    0,
+  );
+
+  if (maxDistanceFromOrigin === 0) {
+    return resampledGroups.map((points) => points.map(clonePoint));
+  }
+
+  const scaleFactor = 1 / maxDistanceFromOrigin;
+
+  return resampledGroups.map((points) =>
+    points.map((point) => ({
+      x: (point.x - center.x) * scaleFactor,
+      y: (point.y - center.y) * scaleFactor,
+    })),
+  );
+}
