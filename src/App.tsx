@@ -261,14 +261,72 @@ function downloadPathsAsSvg(paths: Array<{ label: string; points: Point[] }>, cu
   return filename;
 }
 
-function downloadFrequencySheet(paths: FourierPath[], state: DrawingState): string {
+function createZip(files: Array<{ name: string; contents: string }>): Blob {
+  const encoder = new TextEncoder();
+  const crcTable = Array.from({ length: 256 }, (_, index) => {
+    let value = index;
+    for (let bit = 0; bit < 8; bit += 1) value = value & 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
+    return value >>> 0;
+  });
+  const crc32 = (bytes: Uint8Array) => {
+    let crc = 0xffffffff;
+    bytes.forEach((byte) => { crc = crcTable[(crc ^ byte) & 0xff] ^ (crc >>> 8); });
+    return (crc ^ 0xffffffff) >>> 0;
+  };
+  const localParts: Uint8Array[] = [];
+  const centralParts: Uint8Array[] = [];
+  let offset = 0;
+
+  files.forEach(({ name, contents }) => {
+    const filename = encoder.encode(name);
+    const data = encoder.encode(contents);
+    const crc = crc32(data);
+    const local = new Uint8Array(30 + filename.length);
+    const localView = new DataView(local.buffer);
+    localView.setUint32(0, 0x04034b50, true);
+    localView.setUint16(4, 20, true);
+    localView.setUint16(6, 0x0800, true);
+    localView.setUint32(14, crc, true);
+    localView.setUint32(18, data.length, true);
+    localView.setUint32(22, data.length, true);
+    localView.setUint16(26, filename.length, true);
+    local.set(filename, 30);
+    localParts.push(local, data);
+
+    const central = new Uint8Array(46 + filename.length);
+    const centralView = new DataView(central.buffer);
+    centralView.setUint32(0, 0x02014b50, true);
+    centralView.setUint16(4, 20, true);
+    centralView.setUint16(6, 20, true);
+    centralView.setUint16(8, 0x0800, true);
+    centralView.setUint32(16, crc, true);
+    centralView.setUint32(20, data.length, true);
+    centralView.setUint32(24, data.length, true);
+    centralView.setUint16(28, filename.length, true);
+    centralView.setUint32(42, offset, true);
+    central.set(filename, 46);
+    centralParts.push(central);
+    offset += local.length + data.length;
+  });
+
+  const centralSize = centralParts.reduce((total, part) => total + part.length, 0);
+  const end = new Uint8Array(22);
+  const endView = new DataView(end.buffer);
+  endView.setUint32(0, 0x06054b50, true);
+  endView.setUint16(8, files.length, true);
+  endView.setUint16(10, files.length, true);
+  endView.setUint32(12, centralSize, true);
+  endView.setUint32(16, offset, true);
+  return new Blob([...localParts, ...centralParts, end], { type: 'application/zip' });
+}
+
+function downloadFrequencyImages(paths: FourierPath[], state: DrawingState): string {
   if (paths.length === 0) {
     throw new Error('Draw or import a trace before exporting frequency images.');
   }
 
   const frequencyLimit = Math.max(...paths.map((path) => path.fourierComponents.length));
-  const panelHeight = 440;
-  const panels = Array.from({ length: frequencyLimit }, (_, index) => {
+  const files = Array.from({ length: frequencyLimit }, (_, index) => {
     const frequencyCount = index + 1;
     const pathsAtFrequency = paths.map((path) => ({
       label: path.label,
@@ -281,28 +339,27 @@ function downloadFrequencySheet(paths: FourierPath[], state: DrawingState): stri
       maxX: Math.max(result.maxX, point.x),
       maxY: Math.max(result.maxY, point.y),
     }), { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity });
-    const spanX = Math.max(0.01, bounds.maxX - bounds.minX);
-    const spanY = Math.max(0.01, bounds.maxY - bounds.minY);
-    const scale = Math.min(360 / spanX, 360 / spanY);
-    const centerX = (bounds.minX + bounds.maxX) / 2;
-    const centerY = (bounds.minY + bounds.maxY) / 2;
+    if (allPoints.length < 2) return null;
+    const padding = 0.08;
+    const width = Math.max(0.01, bounds.maxX - bounds.minX + padding * 2);
+    const height = Math.max(0.01, bounds.maxY - bounds.minY + padding * 2);
     const pathMarkup = pathsAtFrequency.map(({ label, points }) => {
       const coordinates = points.map((point) =>
-        `${(200 + (point.x - centerX) * scale).toFixed(2)},${(220 + (point.y - centerY) * scale).toFixed(2)}`,
+        `${(point.x - bounds.minX + padding).toFixed(4)},${(point.y - bounds.minY + padding).toFixed(4)}`,
       ).join(' ');
-      return `<polyline data-path-label="${label}" points="${coordinates}" fill="none" stroke="${state.curveColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+      return `<polyline data-path-label="${label}" points="${coordinates}" fill="none" stroke="${state.curveColor}" stroke-width="0.02" stroke-linecap="round" stroke-linejoin="round"/>`;
     }).join('');
-
-    return `<g transform="translate(0 ${index * panelHeight})"><text x="20" y="32" fill="#d9e6e0" font-family="sans-serif" font-size="20">Frequency ${frequencyCount}</text>${pathMarkup}</g>`;
-  }).join('');
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="${frequencyLimit * panelHeight}" viewBox="0 0 400 ${frequencyLimit * panelHeight}"><rect width="100%" height="100%" fill="#101816"/>${panels}</svg>`;
-  const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width.toFixed(4)} ${height.toFixed(4)}">${pathMarkup}</svg>`;
+    return { name: `unanchor-frequency-${frequencyCount}.svg`, contents: svg };
+  }).filter((file): file is { name: string; contents: string } => file !== null);
+  const filename = 'unanchor-all-frequencies.zip';
+  const url = URL.createObjectURL(createZip(files));
   const link = document.createElement('a');
   link.href = url;
-  link.download = 'unanchor-all-frequency-images.svg';
+  link.download = filename;
   link.click();
-  URL.revokeObjectURL(url);
-  return link.download;
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return filename;
 }
 
 export function App() {
@@ -569,7 +626,7 @@ export function App() {
       const pathsToExport = drawingState.paths.length > 1 && selectedPath
         ? [selectedPath]
         : drawingState.paths;
-      downloadFrequencySheet(pathsToExport, drawingState);
+      downloadFrequencyImages(pathsToExport, drawingState);
       setExportError(null);
     } catch (error) {
       setExportError(error instanceof Error ? error.message : 'Failed to export frequency images.');
