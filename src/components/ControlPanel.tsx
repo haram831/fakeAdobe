@@ -9,6 +9,7 @@ type ControlPanelProps = {
   exportError: string | null;
   onSvgImport: (file: File) => void;
   onExport: () => void;
+  onExportAllFrequencies: () => void;
   onReset: () => void;
 };
 
@@ -72,6 +73,7 @@ export function ControlPanel({
   exportError,
   onSvgImport,
   onExport,
+  onExportAllFrequencies,
   onReset,
 }: ControlPanelProps) {
   const frequencyLimit = getFrequencyLimit(drawingState);
@@ -272,6 +274,15 @@ export function ControlPanel({
             : hasMultiplePaths
               ? 'Export All Paths'
               : 'Export Trace'}
+        </button>
+        <button
+          type="button"
+          className="panel-action-button"
+          onClick={onExportAllFrequencies}
+          disabled={drawingState.paths.length === 0}
+        >
+          <Download size={17} aria-hidden="true" />
+          Download All Frequency Images
         </button>
         {exportError ? <p className="control-error">{exportError}</p> : null}
       </ControlSection>

@@ -261,6 +261,50 @@ function downloadPathsAsSvg(paths: Array<{ label: string; points: Point[] }>, cu
   return filename;
 }
 
+function downloadFrequencySheet(paths: FourierPath[], state: DrawingState): string {
+  if (paths.length === 0) {
+    throw new Error('Draw or import a trace before exporting frequency images.');
+  }
+
+  const frequencyLimit = Math.max(...paths.map((path) => path.fourierComponents.length));
+  const panelHeight = 440;
+  const panels = Array.from({ length: frequencyLimit }, (_, index) => {
+    const frequencyCount = index + 1;
+    const pathsAtFrequency = paths.map((path) => ({
+      label: path.label,
+      points: buildFullReconstructedPath(path, state, Math.min(frequencyCount, path.fourierComponents.length)),
+    })).filter((path) => path.points.length >= 2);
+    const allPoints = pathsAtFrequency.flatMap((path) => path.points);
+    const bounds = allPoints.reduce((result, point) => ({
+      minX: Math.min(result.minX, point.x),
+      minY: Math.min(result.minY, point.y),
+      maxX: Math.max(result.maxX, point.x),
+      maxY: Math.max(result.maxY, point.y),
+    }), { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity });
+    const spanX = Math.max(0.01, bounds.maxX - bounds.minX);
+    const spanY = Math.max(0.01, bounds.maxY - bounds.minY);
+    const scale = Math.min(360 / spanX, 360 / spanY);
+    const centerX = (bounds.minX + bounds.maxX) / 2;
+    const centerY = (bounds.minY + bounds.maxY) / 2;
+    const pathMarkup = pathsAtFrequency.map(({ label, points }) => {
+      const coordinates = points.map((point) =>
+        `${(200 + (point.x - centerX) * scale).toFixed(2)},${(220 + (point.y - centerY) * scale).toFixed(2)}`,
+      ).join(' ');
+      return `<polyline data-path-label="${label}" points="${coordinates}" fill="none" stroke="${state.curveColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+    }).join('');
+
+    return `<g transform="translate(0 ${index * panelHeight})"><text x="20" y="32" fill="#d9e6e0" font-family="sans-serif" font-size="20">Frequency ${frequencyCount}</text>${pathMarkup}</g>`;
+  }).join('');
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="${frequencyLimit * panelHeight}" viewBox="0 0 400 ${frequencyLimit * panelHeight}"><rect width="100%" height="100%" fill="#101816"/>${panels}</svg>`;
+  const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'unanchor-all-frequency-images.svg';
+  link.click();
+  URL.revokeObjectURL(url);
+  return link.download;
+}
+
 export function App() {
   const [drawingState, setDrawingState] = useState<DrawingState>(() => createInitialDrawingState());
   const [svgError, setSvgError] = useState<string | null>(null);
@@ -520,6 +564,18 @@ export function App() {
     }
   };
 
+  const exportAllFrequencies = () => {
+    try {
+      const pathsToExport = drawingState.paths.length > 1 && selectedPath
+        ? [selectedPath]
+        : drawingState.paths;
+      downloadFrequencySheet(pathsToExport, drawingState);
+      setExportError(null);
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : 'Failed to export frequency images.');
+    }
+  };
+
   const resetDrawing = () => {
     reconstructionCacheRef.current.clear();
     setDrawingState(createInitialDrawingState());
@@ -555,6 +611,7 @@ export function App() {
         exportError={exportError}
         onSvgImport={importSvgFile}
         onExport={exportSvg}
+        onExportAllFrequencies={exportAllFrequencies}
         onReset={resetDrawing}
       />
       <FrequencySpectrum
