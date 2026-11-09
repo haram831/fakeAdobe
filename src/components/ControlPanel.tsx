@@ -1,4 +1,5 @@
 import { Download, FileUp, Link, RotateCcw, SlidersHorizontal, Zap } from 'lucide-react';
+import { useState } from 'react';
 import type { ChangeEvent, Dispatch, ReactNode, SetStateAction } from 'react';
 import type { ControlledFailureSettings, DrawingState, ViewMode } from '../types';
 
@@ -9,7 +10,7 @@ type ControlPanelProps = {
   exportError: string | null;
   onSvgImport: (file: File) => void;
   onExport: () => void;
-  onExportAllFrequencies: () => void;
+  onExportAllFrequencies: (frequencies: string) => void;
   onReset: () => void;
 };
 
@@ -76,6 +77,7 @@ export function ControlPanel({
   onExportAllFrequencies,
   onReset,
 }: ControlPanelProps) {
+  const [frequencyExportInput, setFrequencyExportInput] = useState('1, 2, 4, 8, 16, 32, 64, 128, 256');
   const frequencyLimit = getFrequencyLimit(drawingState);
   const frequencyCount = Math.min(drawingState.frequencyCount, frequencyLimit);
   const hasMultiplePaths = drawingState.paths.length > 1;
@@ -278,12 +280,23 @@ export function ControlPanel({
         <button
           type="button"
           className="panel-action-button"
-          onClick={onExportAllFrequencies}
+          onClick={() => onExportAllFrequencies(frequencyExportInput)}
           disabled={drawingState.paths.length === 0}
         >
           <Download size={17} aria-hidden="true" />
-          Download All Frequency Images
+          Download Selected Frequency Images
         </button>
+        <label className="control-row">
+          <span>Frequencies (1–256, comma-separated)</span>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={frequencyExportInput}
+            onChange={(event) => setFrequencyExportInput(event.currentTarget.value)}
+            placeholder="1, 8, 16, 64"
+            aria-label="Frequencies to export"
+          />
+        </label>
         {exportError ? <p className="control-error">{exportError}</p> : null}
       </ControlSection>
 

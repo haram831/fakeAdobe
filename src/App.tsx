@@ -327,14 +327,12 @@ function createZip(files: Array<{ name: string; contents: string }>): Blob {
   return new Blob(blobParts, { type: 'application/zip' });
 }
 
-function downloadFrequencyImages(paths: FourierPath[], state: DrawingState): string {
+function downloadFrequencyImages(paths: FourierPath[], state: DrawingState, frequencies: number[]): string {
   if (paths.length === 0) {
     throw new Error('Draw or import a trace before exporting frequency images.');
   }
 
-  const frequencyLimit = Math.max(...paths.map((path) => path.fourierComponents.length));
-  const files = Array.from({ length: frequencyLimit }, (_, index) => {
-    const frequencyCount = index + 1;
+  const files = frequencies.map((frequencyCount) => {
     const pathsAtFrequency = paths.map((path) => ({
       label: path.label,
       points: buildFullReconstructedPath(path, state, Math.min(frequencyCount, path.fourierComponents.length)),
@@ -359,7 +357,10 @@ function downloadFrequencyImages(paths: FourierPath[], state: DrawingState): str
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width.toFixed(4)} ${height.toFixed(4)}">${pathMarkup}</svg>`;
     return { name: `unanchor-frequency-${frequencyCount}.svg`, contents: svg };
   }).filter((file): file is { name: string; contents: string } => file !== null);
-  const filename = 'unanchor-all-frequencies.zip';
+  if (files.length === 0) {
+    throw new Error('No SVG images could be generated for the selected frequencies.');
+  }
+  const filename = 'unanchor-selected-frequencies.zip';
   const url = URL.createObjectURL(createZip(files));
   const link = document.createElement('a');
   link.href = url;
@@ -628,12 +629,20 @@ export function App() {
     }
   };
 
-  const exportAllFrequencies = () => {
+  const exportSelectedFrequencies = (frequencyInput: string) => {
     try {
+      const tokens = frequencyInput.split(',').map((value) => value.trim());
+      if (tokens.length === 0 || tokens.some((value) => !/^\d+$/.test(value))) {
+        throw new Error('Enter comma-separated whole numbers from 1 to 256.');
+      }
+      const frequencies = [...new Set(tokens.map(Number))];
+      if (frequencies.some((frequency) => frequency < 1 || frequency > 256)) {
+        throw new Error('Frequencies must be integers from 1 to 256.');
+      }
       const pathsToExport = drawingState.paths.length > 1 && selectedPath
         ? [selectedPath]
         : drawingState.paths;
-      downloadFrequencyImages(pathsToExport, drawingState);
+      downloadFrequencyImages(pathsToExport, drawingState, frequencies);
       setExportError(null);
     } catch (error) {
       setExportError(error instanceof Error ? error.message : 'Failed to export frequency images.');
@@ -675,7 +684,7 @@ export function App() {
         exportError={exportError}
         onSvgImport={importSvgFile}
         onExport={exportSvg}
-        onExportAllFrequencies={exportAllFrequencies}
+        onExportAllFrequencies={exportSelectedFrequencies}
         onReset={resetDrawing}
       />
       <FrequencySpectrum
